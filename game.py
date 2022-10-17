@@ -1,178 +1,186 @@
-import math
-import random
-import os
-#hides the pygame message in terminal 
-os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
+from pygame.locals import (
+    RLEACCEL,
+    K_UP,
+    K_DOWN,
+    K_LEFT,
+    K_RIGHT,
+    K_ESCAPE,
+    KEYDOWN,
+    QUIT,
+)
+
 import pygame
 from pygame import mixer
+import random
 
-#start up pygame
+# Define constants for the screen width and height
+screen_width = 800
+screen_height = 600
+
+
+# Import pygame.locals for easier access to key coordinates
+# Updated to conform to flake8 and black standards
+
+# Define a Player object by extending pygame.sprite.Sprite
+# The surface drawn on the screen is now an attribute of 'player'
+class Player(pygame.sprite.Sprite):
+    def __init__(self):
+        super(Player, self).__init__()
+        self.surf = pygame.image.load("jet.png").convert()
+        self.surf.set_colorkey((255, 255, 255), RLEACCEL)
+        self.rect = self.surf.get_rect()
+
+    def update(self, pressed_keys):
+        if pressed_keys[K_UP]:
+            self.rect.move_ip(0, -5)
+            move_up_sound.play()
+        if pressed_keys[K_DOWN]:
+            self.rect.move_ip(0, 5)
+            move_down_sound.play()
+        if pressed_keys[K_LEFT]:
+            self.rect.move_ip(-5, 0)
+            move_left_sound.play()
+        if pressed_keys[K_RIGHT]:
+            self.rect.move_ip(5, 0)
+            move_right_sound.play()
+
+        # Keep player on the screen
+        if self.rect.left < 0:
+            self.rect.left = 0
+        if self.rect.right > screen_width:
+            self.rect.right = screen_width
+        if self.rect.top <= 0:
+            self.rect.top = 0
+        if self.rect.bottom >= screen_height:
+            self.rect.bottom = screen_height
+# Move the sprite based on user keypresses
+
+# Define the enemy object by extending pygame.sprite.Sprite
+# The surface you draw on the screen is now an attribute of 'enemy'
+
+
+class Enemy(pygame.sprite.Sprite):
+    def __init__(self):
+        super(Enemy, self).__init__()
+        self.surf = pygame.image.load("positive_result.png").convert()
+        self.surf.set_colorkey((255, 255, 255), RLEACCEL)
+        self.rect = self.surf.get_rect(
+            center=(
+                random.randint(screen_width + 20, screen_width + 100),
+                random.randint(0, screen_height),
+            )
+        )
+        self.speed = random.randint(0, 5)
+
+    # Move the sprite based on speed
+    # Remove the sprite when it passes the left edge of the screen
+    def update(self):
+        self.rect.move_ip(-self.speed, 0)
+        if self.rect.right < 0:
+            self.kill()
+
+
+    # Setup the clock for a decent framerate
+clock = pygame.time.Clock()
+
+# Setup for sounds. Defaults are good.
+pygame.mixer.init()
+
+# Initialize pygame
 pygame.init()
 
-#window size set up
-screen = pygame.display.set_mode((800, 600))
+# window size set up
+screen = pygame.display.set_mode((screen_width, screen_height))
 
-#fetch background Image
 background = pygame.image.load('background.png')
 
-#sound effects
-mixer.music.load("background_song.wav")
-#loop music indefinitely
-mixer.music.play(-1)
 
-#game name on tab
-pygame.display.set_caption("Corona Invader")
+# Create a custom event for adding a new enemy
+ADDENEMY = pygame.USEREVENT + 1
+pygame.time.set_timer(ADDENEMY, 250)
 
-#player settings and coordinates
-player_img = pygame.image.load('player.png')
-playerX = 375
-playerY = 490
-playerX_change = 0
+# Instantiate player. Right now, this is just a rectangle.
+player = Player()
 
-#enemy settings
-enemy_img = []
-enemyX = []
-enemyY = []
-enemyX_change = []
-enemyY_change = []
-enemies_num = 5
-
-for i in range(enemies_num):
-    enemy_img.append(pygame.image.load('enemy.png'))
-    enemyX.append(random.randint(0, 735))
-    enemyY.append(random.randint(45, 140))
-    enemyX_change.append(4)
-    enemyY_change.append(40)
-
-#bullet settings and state
-bulletImg = pygame.image.load('bullet.png')
-bulletX = 0
-bulletY = 475
-bulletX_change = 0
-bulletY_change = 10
-#set state to ready
-bullet_state = "ready"
-
-#points score and font
-score_value = 0
-font = pygame.font.Font('freesansbold.ttf', 35)
-
-textX = 10
-testY = 10
-
-#gameover
-end_font = pygame.font.Font('freesansbold.ttf', 64)
-
-#display points on top left screen
-def show_points(x, y):
-    score = font.render("Points : " + str(score_value), True, (0, 0, 0))
-    screen.blit(score, (x, y))
-
-#display game over page when you lose
-def game_over_message():
-    over_text = end_font.render("CORONA WON", True, (0, 0, 0))
-    screen.blit(over_text, (210, 270))
-
-#render player object
-def player(x, y):
-    screen.blit(player_img, (x, y))
-
-#render enemy object
-def enemy(x, y, i):
-    screen.blit(enemy_img[i], (x, y))
-
-#render bullet object
-def shoot_bullet(x, y):
-    global bullet_state
-    bullet_state = "fire"
-    screen.blit(bulletImg, (x + 16, y + 10))
-
-#collision math
-def isCollision(enemyX, enemyY, bulletX, bulletY):
-    distance = math.sqrt(math.pow(enemyX - bulletX, 2) + (math.pow(enemyY - bulletY, 2)))
-    if distance < 26:
-        return True
-    else:
-        return False
+# Create groups to hold enemy sprites and all sprites
+# - enemies is used for collision detection and position updates
+# - all_sprites is used for rendering
+enemies = pygame.sprite.Group()
+all_sprites = pygame.sprite.Group()
+all_sprites.add(player)
 
 
-#Loop the game
+# Load and play background music
+pygame.mixer.music.load("background_music.wav")
+pygame.mixer.music.play(loops=-1)
+
+# Load all sound files
+# Sound sources: Jon Fincher
+move_up_sound = pygame.mixer.Sound("Rising_putter.mp3")
+move_down_sound = pygame.mixer.Sound("Rising_putter.mp3")
+move_left_sound = pygame.mixer.Sound("Rising_putter.mp3")
+move_right_sound = pygame.mixer.Sound("Rising_putter.mp3")
+collision_sound = pygame.mixer.Sound("Collision.mp3")
+
+# Variable to keep the main loop running
 running = True
+
+# Main loop
 while running:
 
-    screen.fill((0, 0, 0))
-    screen.blit(background, (0, 0))
+    # Look at every event in the queue
     for event in pygame.event.get():
-        if event.type == pygame.QUIT:
+        # Did the user hit a key?
+        if event.type == KEYDOWN:
+            # Was it the Escape key? If so, stop the loop.
+            if event.key == K_ESCAPE:
+                running = False
+
+        # Did the user click the window close button? If so, stop the loop.
+        elif event.type == QUIT:
             running = False
 
-        #deciding movements: left or right
-        if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_LEFT:
-                playerX_change = -5
-            if event.key == pygame.K_RIGHT:
-                playerX_change = 5
-            if event.key == pygame.K_SPACE:
-                if bullet_state is "ready":
-                    #release bullet sound effect if ready
-                    bulletSound = mixer.Sound("shoot.wav")
-                    bulletSound.play()
-                    bulletX = playerX
-                    shoot_bullet(bulletX, bulletY)
+        # Add a new enemy?
+        elif event.type == ADDENEMY:
+            # Create the new enemy and add it to sprite groups
+            new_enemy = Enemy()
+            enemies.add(new_enemy)
+            all_sprites.add(new_enemy)
 
-        if event.type == pygame.KEYUP:
-            if event.key == pygame.K_LEFT or event.key == pygame.K_RIGHT:
-                playerX_change = 0
+    # Get the set of keys pressed and check for user input
+    pressed_keys = pygame.key.get_pressed()
 
-    playerX += playerX_change
-    if playerX <= 0:
-        playerX = 0
-    elif playerX >= 736:
-        playerX = 736
+    # Update the player sprite based on user keypresses
+    player.update(pressed_keys)
 
-    #enemy movements
-    for i in range(enemies_num):
+    # Update enemy position
+    enemies.update()
 
-        #decides when game is over
-        if enemyY[i] > 440:
-            for j in range(enemies_num):
-                enemyY[j] = 2000
-            game_over_message()
-            break
+    # Fill the screen with white
+    screen.fill((0, 0, 0))
 
-        enemyX[i] += enemyX_change[i]
-        if enemyX[i] <= 0:
-            enemyX_change[i] = 4
-            enemyY[i] += enemyY_change[i]
-        elif enemyX[i] >= 735:
-            enemyX_change[i] = -4
-            enemyY[i] += enemyY_change[i]
+    screen.blit(background, (0, 0))
 
-        #collision detection
-        collision = isCollision(enemyX[i], enemyY[i], bulletX, bulletY)
-        if collision:
-            #play explosion.wav when hit
-            explosionSound = mixer.Sound("explosion.wav")
-            explosionSound.play()
-            bulletY = 480
-            bullet_state = "ready"
-            score_value += 1
-            enemyX[i] = random.randint(0, 736)
-            enemyY[i] = random.randint(50, 150)
+    # Draw all sprites
+    for entity in all_sprites:
+        screen.blit(entity.surf, entity.rect)
+    # Flip everything to the display
+    pygame.display.flip()
 
-        enemy(enemyX[i], enemyY[i], i)
+    # Ensure program maintains a rate of 30 frames per second
+    clock.tick(30)
 
-    #bullet movements depending on state
-    if bulletY <= 0:
-        bulletY = 480
-        bullet_state = "ready"
+    # Check if any enemies have collided with the player
+    if pygame.sprite.spritecollideany(player, enemies):
+        # If so, then remove the player and stop the loop
+        player.kill()
+        # Stop any moving sounds and play the collision sound
+        move_up_sound.stop()
+        move_down_sound.stop()
+        collision_sound.play()
+        pygame.time.delay(3000)
+        running = False
 
-    if bullet_state is "fire":
-        shoot_bullet(bulletX, bulletY)
-        bulletY -= bulletY_change
-
-    #return functions
-    player(playerX, playerY)
-    show_points(textX, testY)
-    #update portions of screen
-    pygame.display.update()
+# All done! Stop and quit the mixer.
+pygame.mixer.music.stop()
+pygame.mixer.quit()
